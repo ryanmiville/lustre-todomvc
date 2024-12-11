@@ -43,7 +43,7 @@ type Filter {
   Completed
 }
 
-fn init(_flags) -> #(Model, Effect(msg)) {
+fn init(_) -> #(Model, Effect(msg)) {
   #(Model(dict.new(), All, 0, "", ""), effect.none())
 }
 
@@ -78,6 +78,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let model = Model(..model, todos:, last_id:, new_todo_input: "")
       #(model, effect.none())
     }
+
     UserBlurredExistingTodo(id) -> {
       let todos =
         dict.upsert(todos, id, fn(i) {
@@ -87,13 +88,16 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let model = Model(..model, todos:, existing_todo_input: "")
       #(model, effect.none())
     }
+
     UserClickedClearCompleted -> {
       let todos = dict.filter(todos, fn(_, item) { !item.completed })
       #(Model(..model, todos:), effect.none())
     }
+
     UserClickedFilter(filter) -> {
       #(Model(..model, filter:), effect.none())
     }
+
     UserClickedToggle(id, checked) -> {
       let todos =
         dict.upsert(todos, id, fn(i) {
@@ -103,17 +107,20 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
+
     UserClickedToggleAll(checked) -> {
       let todos =
         dict.map_values(todos, fn(_, i) { Todo(..i, completed: checked) })
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
+
     UserDeletedTodo(id) -> {
       let todos = dict.delete(todos, id)
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
+
     UserDoubleClickedTodo(id, input) -> {
       let todos =
         dict.upsert(todos, id, fn(i) {
@@ -124,6 +131,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let model = Model(..model, todos:, existing_todo_input: input)
       #(model, focus_edit_input())
     }
+
     UserEditedTodo(id) -> {
       use <- bool.guard(existing_todo_input == "", #(model, delete_todo(id)))
 
@@ -136,10 +144,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
+
     UserUpdatedExistingInput(existing_todo_input) -> {
       let model = Model(..model, existing_todo_input:)
       #(model, effect.none())
     }
+
     UserUpdatedNewInput(new_todo_input) -> {
       #(Model(..model, new_todo_input:), effect.none())
     }
@@ -168,7 +178,9 @@ fn header(model: Model) {
 
 fn main_content(model: Model) {
   let visible_todos = case model.filter {
-    All -> dict.values(model.todos) |> list.sort(compare)
+    All ->
+      dict.values(model.todos)
+      |> list.sort(compare)
     Active ->
       dict.values(model.todos)
       |> list.filter(fn(i) { !i.completed })
