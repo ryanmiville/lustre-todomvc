@@ -2,3 +2,7 @@
 *.ez
 /build
 erl_crash.dump
+
+# Auto generated bundles
+priv/static/todomvc.min.mjs
+priv/static/todomvc.mjs
