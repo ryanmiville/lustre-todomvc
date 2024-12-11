@@ -1,6 +1,9 @@
 import gleam/bool
+import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
+import gleam/option.{Some}
+import gleam/order
 import lustre
 import lustre/attribute.{type Attribute}
 import lustre/effect.{type Effect}
@@ -18,7 +21,7 @@ pub fn main() {
 
 type Model {
   Model(
-    todos: List(Todo),
+    todos: Dict(Int, Todo),
     filter: Filter,
     last_id: Int,
     new_todo_input: String,
@@ -30,6 +33,10 @@ type Todo {
   Todo(id: Int, description: String, completed: Bool, editing: Bool)
 }
 
+fn compare(a: Todo, b: Todo) -> order.Order {
+  int.compare(a.id, b.id)
+}
+
 type Filter {
   All
   Active
@@ -37,7 +44,7 @@ type Filter {
 }
 
 fn init(_flags) -> #(Model, Effect(msg)) {
-  #(Model([], All, 0, "", ""), effect.none())
+  #(Model(dict.new(), All, 0, "", ""), effect.none())
 }
 
 // UPDATE ---------------------------------------------------------------------
@@ -58,32 +65,30 @@ type Msg {
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
-  let Model(todos, _, last_id, _, existing_todo_input) = model
+  let Model(todos, _, last_id, new_todo_input, existing_todo_input) = model
 
   case msg {
     Noop -> #(model, effect.none())
 
     UserAddedTodo -> {
-      let description = model.new_todo_input
+      let description = new_todo_input
       let last_id = last_id + 1
       let new = Todo(last_id, description, False, False)
-      let todos = list.append(todos, [new])
+      let todos = dict.insert(todos, last_id, new)
       let model = Model(..model, todos:, last_id:, new_todo_input: "")
       #(model, effect.none())
     }
     UserBlurredExistingTodo(id) -> {
       let todos =
-        list.map(todos, fn(i) {
-          case i.id == id {
-            True -> Todo(..i, editing: False)
-            False -> i
-          }
+        dict.upsert(todos, id, fn(i) {
+          let assert Some(i) = i
+          Todo(..i, editing: False)
         })
       let model = Model(..model, todos:, existing_todo_input: "")
       #(model, effect.none())
     }
     UserClickedClearCompleted -> {
-      let todos = list.filter(todos, fn(i) { !i.completed })
+      let todos = dict.filter(todos, fn(_, item) { !item.completed })
       #(Model(..model, todos:), effect.none())
     }
     UserClickedFilter(filter) -> {
@@ -91,32 +96,29 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
     UserClickedToggle(id, checked) -> {
       let todos =
-        list.map(todos, fn(i) {
-          case i.id == id {
-            True -> Todo(..i, completed: checked)
-            False -> i
-          }
+        dict.upsert(todos, id, fn(i) {
+          let assert Some(i) = i
+          Todo(..i, completed: checked)
         })
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
     UserClickedToggleAll(checked) -> {
-      let todos = list.map(todos, fn(i) { Todo(..i, completed: checked) })
+      let todos =
+        dict.map_values(todos, fn(_, i) { Todo(..i, completed: checked) })
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
     UserDeletedTodo(id) -> {
-      let todos = list.filter(todos, fn(i) { i.id != id })
+      let todos = dict.delete(todos, id)
       let model = Model(..model, todos:)
       #(model, effect.none())
     }
     UserDoubleClickedTodo(id, input) -> {
       let todos =
-        list.map(todos, fn(i) {
-          case i.id == id {
-            True -> Todo(..i, editing: True)
-            False -> i
-          }
+        dict.upsert(todos, id, fn(i) {
+          let assert Some(i) = i
+          Todo(..i, editing: True)
         })
 
       let model = Model(..model, todos:, existing_todo_input: input)
@@ -127,11 +129,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       let description = existing_todo_input
       let todos =
-        list.map(todos, fn(i) {
-          case i.id == id {
-            True -> Todo(..i, description:, editing: False)
-            False -> i
-          }
+        dict.upsert(todos, id, fn(i) {
+          let assert Some(i) = i
+          Todo(..i, description:, editing: False)
         })
       let model = Model(..model, todos:)
       #(model, effect.none())
@@ -168,21 +168,29 @@ fn header(model: Model) {
 
 fn main_content(model: Model) {
   let visible_todos = case model.filter {
-    All -> model.todos
-    Active -> list.filter(model.todos, fn(i) { !i.completed })
-    Completed -> list.filter(model.todos, fn(i) { i.completed })
+    All -> dict.values(model.todos) |> list.sort(compare)
+    Active ->
+      dict.values(model.todos)
+      |> list.filter(fn(i) { !i.completed })
+      |> list.sort(compare)
+    Completed ->
+      dict.values(model.todos)
+      |> list.filter(fn(i) { i.completed })
+      |> list.sort(compare)
   }
 
   html.main([attribute.class("main")], [
-    toggle(model.todos),
+    toggle(dict.values(model.todos) |> list.sort(compare)),
     todo_list(visible_todos, model),
   ])
 }
 
 fn footer(model: Model) {
-  let active_todos = list.filter(model.todos, fn(i) { !i.completed })
+  let active_count =
+    dict.values(model.todos)
+    |> list.count(fn(i) { !i.completed })
   html.footer([attribute.class("footer")], [
-    todo_count(active_todos),
+    todo_count(active_count),
     filters(model.filter),
     clear_completed(model),
   ])
@@ -271,8 +279,8 @@ fn todo_item_not_edit(item: Todo) {
   ])
 }
 
-fn todo_count(active_todos: List(Todo)) {
-  let text = case list.length(active_todos) {
+fn todo_count(count: Int) {
+  let text = case count {
     1 -> "1 item left!"
     n -> int.to_string(n) <> " items left!"
   }
@@ -297,19 +305,14 @@ fn filter_item(item: Filter, current: Filter) {
     Completed -> "Completed"
   }
   html.li([], [
-    html.a(
-      [
-        attribute.class(cn),
-        attribute.href("#" <> text),
-        event.on_click(UserClickedFilter(item)),
-      ],
-      [html.text(text)],
-    ),
+    html.a([attribute.class(cn), event.on_click(UserClickedFilter(item))], [
+      html.text(text),
+    ]),
   ])
 }
 
 fn clear_completed(model: Model) {
-  let disabled = list.is_empty(model.todos)
+  let disabled = dict.is_empty(model.todos)
   html.button(
     [
       attribute.class("clear-completed"),
@@ -374,7 +377,7 @@ fn on_enter(msg: Msg) -> Attribute(Msg) {
 }
 
 fn focus_edit_input() -> Effect(msg) {
-  use _dispatch <- effect.from
+  use _ <- effect.from
   use <- after_render
   focus(".todo-list .new-todo")
 }
