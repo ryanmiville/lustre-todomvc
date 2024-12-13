@@ -7,7 +7,7 @@ import gleam/order
 import lustre
 import lustre/attribute.{type Attribute}
 import lustre/effect.{type Effect}
-import lustre/element
+import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 
@@ -158,7 +158,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
 // VIEW -----------------------------------------------------------------------
 
-fn view(model: Model) {
+fn view(model: Model) -> Element(Msg) {
   html.div([], [
     html.div([attribute.class("todoapp")], [
       header(model),
@@ -169,14 +169,14 @@ fn view(model: Model) {
   ])
 }
 
-fn header(model: Model) {
+fn header(model: Model) -> Element(Msg) {
   html.header([attribute.class("header")], [
     html.h1([], [html.text("todos")]),
     new_todo(model),
   ])
 }
 
-fn main_content(model: Model) {
+fn main_content(model: Model) -> Element(Msg) {
   let visible_todos = case model.filter {
     All ->
       dict.values(model.todos)
@@ -197,7 +197,7 @@ fn main_content(model: Model) {
   ])
 }
 
-fn footer(model: Model) {
+fn footer(model: Model) -> Element(Msg) {
   let active_count =
     dict.values(model.todos)
     |> list.count(fn(i) { !i.completed })
@@ -208,7 +208,7 @@ fn footer(model: Model) {
   ])
 }
 
-fn new_todo(model: Model) {
+fn new_todo(model: Model) -> Element(Msg) {
   html.div([attribute.class("view")], [
     input(
       on_enter: on_enter(UserAddedTodo),
@@ -222,7 +222,7 @@ fn new_todo(model: Model) {
   ])
 }
 
-fn toggle(visible_todos: List(Todo)) {
+fn toggle(visible_todos: List(Todo)) -> Element(Msg) {
   use <- bool.guard(list.is_empty(visible_todos), element.none())
 
   html.div([attribute.class("toggle-all-container")], [
@@ -239,12 +239,12 @@ fn toggle(visible_todos: List(Todo)) {
   ])
 }
 
-fn todo_list(visible_todos: List(Todo), model: Model) {
+fn todo_list(visible_todos: List(Todo), model: Model) -> Element(Msg) {
   let items = list.map(visible_todos, todo_item(_, model))
   html.ul([attribute.class("todo-list")], items)
 }
 
-fn todo_item(item: Todo, model: Model) {
+fn todo_item(item: Todo, model: Model) -> Element(Msg) {
   let cn = case item.completed {
     True -> "completed"
     False -> ""
@@ -258,7 +258,7 @@ fn todo_item(item: Todo, model: Model) {
   html.li([attribute.class(cn)], [el])
 }
 
-fn todo_item_edit(item: Todo, model: Model) {
+fn todo_item_edit(item: Todo, model: Model) -> Element(Msg) {
   html.div([attribute.class("view")], [
     input(
       on_enter: on_enter(UserEditedTodo(item.id)),
@@ -272,7 +272,7 @@ fn todo_item_edit(item: Todo, model: Model) {
   ])
 }
 
-fn todo_item_not_edit(item: Todo) {
+fn todo_item_not_edit(item: Todo) -> Element(Msg) {
   html.div([attribute.class("view")], [
     html.input([
       attribute.class("toggle"),
@@ -291,7 +291,7 @@ fn todo_item_not_edit(item: Todo) {
   ])
 }
 
-fn todo_count(count: Int) {
+fn todo_count(count: Int) -> Element(c) {
   let text = case count {
     1 -> "1 item left!"
     n -> int.to_string(n) <> " items left!"
@@ -299,13 +299,13 @@ fn todo_count(count: Int) {
   html.span([attribute.class("todo-count")], [html.text(text)])
 }
 
-fn filters(current: Filter) {
+fn filters(current: Filter) -> Element(Msg) {
   [All, Active, Completed]
   |> list.map(filter_item(_, current))
   |> html.ul([attribute.class("filters")], _)
 }
 
-fn filter_item(item: Filter, current: Filter) {
+fn filter_item(item: Filter, current: Filter) -> Element(Msg) {
   let cn = case item == current {
     True -> "selected"
     False -> ""
@@ -323,7 +323,7 @@ fn filter_item(item: Filter, current: Filter) {
   ])
 }
 
-fn clear_completed(model: Model) {
+fn clear_completed(model: Model) -> Element(Msg) {
   let disabled = dict.is_empty(model.todos)
   html.button(
     [
@@ -343,7 +343,7 @@ fn input(
   autofocus autofocus: Bool,
   label label: String,
   value value: String,
-) {
+) -> Element(Msg) {
   html.div([attribute.class("input-container")], [
     html.input([
       attribute.class("new-todo"),
@@ -363,18 +363,18 @@ fn input(
   ])
 }
 
-fn edit_message() {
+fn edit_message() -> Element(b) {
   html.footer([attribute.class("info")], [
     html.p([], [html.text("Double-click to edit a todo")]),
   ])
 }
 
-fn delete_todo(id: Int) {
+fn delete_todo(id: Int) -> Effect(Msg) {
   use dispatch <- effect.from
   dispatch(UserDeletedTodo(id))
 }
 
-fn on_double_click(msg: Msg) {
+fn on_double_click(msg: Msg) -> Attribute(Msg) {
   use _ <- event.on("dblclick")
   Ok(msg)
 }
