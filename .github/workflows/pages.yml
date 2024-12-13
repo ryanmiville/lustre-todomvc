@@ -1,0 +1,47 @@
+name: deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.0"
+          gleam-version: "1.5.1"
+          rebar3-version: "3"
+      - name: Install dependencies
+        run: gleam deps download
+      - name: Build app
+        run: gleam run -m lustre/dev build app --minify
+      - name: Copy output to dist
+        run: |
+          mkdir -p dist
+          cp index.html dist/index.html
+          cp -r priv dist/priv
+      - name: Update path in index.html to use minified app
+        run: sed -i 's|priv/static/todomvc.mjs|priv/static/todomvc.min.mjs|' dist/index.html
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "dist"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
