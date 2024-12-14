@@ -1,9 +1,11 @@
 import gleam/bool
 import gleam/dict.{type Dict}
+import gleam/dynamic
 import gleam/int
 import gleam/list
-import gleam/option.{Some}
+import gleam/option.{type Option, None, Some}
 import gleam/order
+import gleam/result
 import lustre
 import lustre/attribute.{type Attribute}
 import lustre/effect.{type Effect}
@@ -50,7 +52,6 @@ fn init(_) -> #(Model, Effect(msg)) {
 // UPDATE ---------------------------------------------------------------------
 
 type Msg {
-  Noop
   UserAddedTodo
   UserBlurredExistingTodo(id: Int)
   UserClickedClearCompleted
@@ -68,8 +69,6 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   let Model(todos, _, last_id, new_todo_input, existing_todo_input) = model
 
   case msg {
-    Noop -> #(model, effect.none())
-
     UserAddedTodo -> {
       let description = new_todo_input
       let last_id = last_id + 1
@@ -211,9 +210,9 @@ fn footer(model: Model) -> Element(Msg) {
 fn new_todo(model: Model) -> Element(Msg) {
   html.div([attribute.class("view")], [
     input(
-      on_enter: on_enter(UserAddedTodo),
+      on_enter: UserAddedTodo,
       on_input: UserUpdatedNewInput,
-      on_blur: Noop,
+      on_blur: None,
       placeholder: "What needs to be done?",
       autofocus: True,
       label: "New Todo Input",
@@ -261,9 +260,9 @@ fn todo_item(item: Todo, model: Model) -> Element(Msg) {
 fn todo_item_edit(item: Todo, model: Model) -> Element(Msg) {
   html.div([attribute.class("view")], [
     input(
-      on_enter: on_enter(UserEditedTodo(item.id)),
+      on_enter: UserEditedTodo(item.id),
       on_input: UserUpdatedExistingInput,
-      on_blur: UserBlurredExistingTodo(item.id),
+      on_blur: Some(UserBlurredExistingTodo(item.id)),
       placeholder: "",
       autofocus: False,
       label: "Edit Todo Input",
@@ -336,14 +335,19 @@ fn clear_completed(model: Model) -> Element(Msg) {
 }
 
 fn input(
-  on_enter on_enter: Attribute(Msg),
+  on_enter on_enter: Msg,
   on_input on_input: fn(String) -> Msg,
-  on_blur on_blur: Msg,
+  on_blur on_blur: Option(Msg),
   placeholder placeholder: String,
   autofocus autofocus: Bool,
   label label: String,
   value value: String,
 ) -> Element(Msg) {
+  let on_blur =
+    on_blur
+    |> option.map(event.on_blur)
+    |> option.unwrap(attribute.none())
+
   html.div([attribute.class("input-container")], [
     html.input([
       attribute.class("new-todo"),
@@ -352,9 +356,9 @@ fn input(
       attribute.autofocus(autofocus),
       attribute.placeholder(placeholder),
       attribute.value(value),
-      on_enter,
+      on_enter_down(on_enter),
       event.on_input(on_input),
-      event.on_blur(on_blur),
+      on_blur,
     ]),
     html.label(
       [attribute.class("visually-hidden"), attribute.for("todo-input")],
@@ -379,11 +383,14 @@ fn on_double_click(msg: Msg) -> Attribute(Msg) {
   Ok(msg)
 }
 
-fn on_enter(msg: Msg) -> Attribute(Msg) {
-  event.on_keydown(fn(key) {
+fn on_enter_down(msg: Msg) -> Attribute(Msg) {
+  use event <- event.on("keydown")
+  event
+  |> dynamic.field("key", dynamic.string)
+  |> result.try(fn(key) {
     case key {
-      "Enter" -> msg
-      _ -> Noop
+      "Enter" -> Ok(msg)
+      _ -> Error([])
     }
   })
 }
