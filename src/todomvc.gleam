@@ -1,11 +1,10 @@
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/dynamic
+import gleam/dynamic/decode
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
-import gleam/result
 import lustre
 import lustre/attribute.{type Attribute}
 import lustre/effect.{type Effect}
@@ -379,20 +378,19 @@ fn delete_todo(id: Int) -> Effect(Msg) {
 }
 
 fn on_double_click(msg: Msg) -> Attribute(Msg) {
-  use _ <- event.on("dblclick")
-  Ok(msg)
+  event.on("dblclick", decode.success(msg))
 }
 
 fn on_enter_down(msg: Msg) -> Attribute(Msg) {
-  use event <- event.on("keydown")
-  event
-  |> dynamic.field("key", dynamic.string)
-  |> result.try(fn(key) {
-    case key {
-      "Enter" -> Ok(msg)
-      _ -> Error([])
-    }
-  })
+  let decoder =
+    decode.at(["key"], decode.string)
+    |> decode.then(fn(key) {
+      case key {
+        "Enter" -> decode.success(msg)
+        _ -> decode.failure(msg, "expected Enter")
+      }
+    })
+  event.on("keydown", decoder)
 }
 
 fn focus_edit_input() -> Effect(msg) {
